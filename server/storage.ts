@@ -13,7 +13,7 @@ import {
   type InsertApiUsage
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -27,11 +27,13 @@ export interface IStorage {
   createBot(bot: InsertBot): Promise<Bot>;
   updateBot(id: number, bot: Partial<InsertBot>): Promise<Bot | undefined>;
   deleteBot(id: number): Promise<boolean>;
+  bulkCreateBots(bots: InsertBot[]): Promise<Bot[]>;
   
   // Activity methods
   getActivities(limit?: number, botId?: number): Promise<Activity[]>;
   createActivity(activity: InsertActivity): Promise<Activity>;
   getActivitiesByBot(botId: number, limit?: number): Promise<Activity[]>;
+  getBotInteractions(botId?: number, limit?: number): Promise<Activity[]>;
   
   // API Usage methods
   getApiUsage(service: string): Promise<ApiUsage | undefined>;
@@ -154,6 +156,17 @@ export class MemStorage implements IStorage {
     return this.bots.delete(id);
   }
 
+  async bulkCreateBots(insertBots: InsertBot[]): Promise<Bot[]> {
+    const createdBots: Bot[] = [];
+    
+    for (const insertBot of insertBots) {
+      const bot = await this.createBot(insertBot);
+      createdBots.push(bot);
+    }
+    
+    return createdBots;
+  }
+
   async getActivities(limit = 50, botId?: number): Promise<Activity[]> {
     let activities = Array.from(this.activities.values());
     
@@ -186,6 +199,20 @@ export class MemStorage implements IStorage {
 
   async getActivitiesByBot(botId: number, limit = 50): Promise<Activity[]> {
     return this.getActivities(limit, botId);
+  }
+
+  async getBotInteractions(botId?: number, limit = 50): Promise<Activity[]> {
+    let activities = Array.from(this.activities.values());
+    
+    activities = activities.filter(activity => activity.action === 'bot_interaction');
+    
+    if (botId) {
+      activities = activities.filter(activity => activity.botId === botId);
+    }
+    
+    return activities
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+      .slice(0, limit);
   }
 
   async getApiUsage(service: string): Promise<ApiUsage | undefined> {
@@ -302,6 +329,14 @@ export class DatabaseStorage implements IStorage {
     return (result.rowCount ?? 0) > 0;
   }
 
+  async bulkCreateBots(insertBots: InsertBot[]): Promise<Bot[]> {
+    const createdBots = await db
+      .insert(bots)
+      .values(insertBots)
+      .returning();
+    return createdBots;
+  }
+
   async getActivities(limit = 50, botId?: number): Promise<Activity[]> {
     const query = db.select().from(activities);
     
@@ -326,6 +361,20 @@ export class DatabaseStorage implements IStorage {
     return await db.select()
       .from(activities)
       .where(eq(activities.botId, botId))
+      .orderBy(desc(activities.createdAt))
+      .limit(limit);
+  }
+
+  async getBotInteractions(botId?: number, limit = 50): Promise<Activity[]> {
+    const conditions = [eq(activities.action, 'bot_interaction')];
+    
+    if (botId) {
+      conditions.push(eq(activities.botId, botId));
+    }
+    
+    return await db.select()
+      .from(activities)
+      .where(and(...conditions))
       .orderBy(desc(activities.createdAt))
       .limit(limit);
   }

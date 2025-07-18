@@ -11,6 +11,7 @@ import ContentGeneration from "./pages/ContentGeneration";
 import Analytics from "./pages/Analytics";
 import ApiSettings from "./pages/ApiSettings";
 import ActivityLogs from "./pages/ActivityLogs";
+import BotInteractions from "./pages/BotInteractions";
 import NotFound from "@/pages/not-found";
 
 function AppContent() {
@@ -37,6 +38,7 @@ function AppContent() {
           <Route path="/" component={Dashboard} />
           <Route path="/bots" component={BotManagement} />
           <Route path="/content" component={ContentGeneration} />
+          <Route path="/interactions" component={BotInteractions} />
           <Route path="/analytics" component={Analytics} />
           <Route path="/settings" component={ApiSettings} />
           <Route path="/logs" component={ActivityLogs} />

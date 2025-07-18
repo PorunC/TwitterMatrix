@@ -7,13 +7,15 @@ import {
   Edit, 
   Home, 
   List, 
-  Settings 
+  Settings,
+  Users
 } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Bot Management", href: "/bots", icon: Bot },
   { name: "Content Generation", href: "/content", icon: Edit },
+  { name: "Bot Interactions", href: "/interactions", icon: Users },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "API Settings", href: "/settings", icon: Settings },
   { name: "Activity Logs", href: "/logs", icon: List },
