@@ -1,20 +1,20 @@
 import axios from 'axios';
 import { storage } from '../storage';
 
-const BIANXIE_BASE_URL = 'https://api.bianxie.ai/v1';
-
 export class LLMService {
   private apiKey: string;
+  private baseUrl: string;
 
   constructor() {
     this.apiKey = process.env.BIANXIE_API_KEY || process.env.LLM_API_KEY || '';
+    this.baseUrl = process.env.BIANXIE_BASE_URL || process.env.LLM_BASE_URL || 'https://api.bianxie.ai/v1';
   }
 
   private async makeRequest(endpoint: string, data: any) {
     try {
       await storage.incrementApiCall('llm', endpoint);
       
-      const response = await axios.post(`${BIANXIE_BASE_URL}${endpoint}`, data, {
+      const response = await axios.post(`${this.baseUrl}${endpoint}`, data, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
