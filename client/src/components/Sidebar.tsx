@@ -12,7 +12,7 @@ import {
   Wifi,
   WifiOff
 } from "lucide-react";
-import { useWebSocket } from "@/hooks/useWebSocket";
+import { useWebSocket } from "@/contexts/WebSocketContext";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },

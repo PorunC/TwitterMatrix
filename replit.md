@@ -39,6 +39,13 @@ Preferred communication style: Simple, everyday language.
   - 创建了.env.example模板文件，方便用户快速配置
   - 更新了.gitignore文件，确保敏感信息不被提交
 
+- **WebSocket生产环境问题修复**：
+  - 解决了WebSocket在生产环境中频繁断开的问题
+  - 创建了全局WebSocketContext，确保只有一个WebSocket连接
+  - 修复了多组件重复创建WebSocket实例的问题
+  - 添加了生产环境配置文档 WEBSOCKET_PRODUCTION_NOTES.md
+  - 实现了稳定的ping/pong心跳机制
+
 ### January 18, 2025
 - Made LLM API base URL configurable via environment variables
 - Added configurable Twitter API base URL

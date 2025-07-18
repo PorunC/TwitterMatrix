@@ -1,19 +1,38 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, ReactNode, useCallback } from 'react';
 import { WebSocketMessage } from '../types';
 
-export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
+interface WebSocketContextType {
+  isConnected: boolean;
+  sendMessage: (message: WebSocketMessage) => void;
+  addMessageHandler: (handler: (message: WebSocketMessage) => void) => () => void;
+}
+
+const WebSocketContext = createContext<WebSocketContextType | null>(null);
+
+export function useWebSocket() {
+  const context = useContext(WebSocketContext);
+  if (!context) {
+    throw new Error('useWebSocket must be used within a WebSocketProvider');
+  }
+  return context;
+}
+
+export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const messageHandlers = useRef<Set<(message: WebSocketMessage) => void>>(new Set());
 
   useEffect(() => {
+    let mounted = true;
+
     function connect() {
       // If we've made too many reconnection attempts, stop trying
-      if (reconnectAttempts.current >= maxReconnectAttempts) {
-        console.log('Max reconnection attempts reached. Stopping...');
+      if (reconnectAttempts.current >= maxReconnectAttempts || !mounted) {
+        console.log('Max reconnection attempts reached or component unmounted. Stopping...');
         return;
       }
 
@@ -21,9 +40,15 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
       const wsUrl = `${protocol}//${window.location.host}/ws`;
       
       try {
+        // Close existing connection if any
+        if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+          wsRef.current.close();
+        }
+        
         wsRef.current = new WebSocket(wsUrl);
 
         wsRef.current.onopen = () => {
+          if (!mounted) return;
           setIsConnected(true);
           reconnectAttempts.current = 0; // Reset attempts on successful connection
           console.log('WebSocket connected');
@@ -40,15 +65,25 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
         };
 
         wsRef.current.onmessage = (event) => {
+          if (!mounted) return;
           try {
             const message = JSON.parse(event.data);
-            onMessage?.(message);
+            console.log('WebSocket message:', message);
+            
+            // Handle connection confirmation
+            if (message.type === 'connected') {
+              console.log('WebSocket connection confirmed by server');
+            }
+            
+            // Notify all message handlers
+            messageHandlers.current.forEach(handler => handler(message));
           } catch (error) {
             console.error('Failed to parse WebSocket message:', error);
           }
         };
 
         wsRef.current.onclose = (event) => {
+          if (!mounted) return;
           setIsConnected(false);
           console.log('WebSocket disconnected');
           
@@ -59,7 +94,7 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
           }
           
           // Only reconnect if it wasn't a clean close and we haven't exceeded max attempts
-          if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts) {
+          if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts && mounted) {
             reconnectAttempts.current++;
             const delay = Math.min(2000 * reconnectAttempts.current, 10000); // Linear backoff, max 10s
             reconnectTimeoutRef.current = setTimeout(() => {
@@ -72,6 +107,7 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
         };
 
         wsRef.current.onerror = (error) => {
+          if (!mounted) return;
           console.error('WebSocket error:', error);
           setIsConnected(false);
         };
@@ -84,6 +120,7 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
     connect();
 
     return () => {
+      mounted = false;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
@@ -94,7 +131,7 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
         wsRef.current.close(1000, 'Component unmounting'); // Clean close
       }
     };
-  }, [onMessage]);
+  }, []);
 
   const sendMessage = (message: WebSocketMessage) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -102,7 +139,16 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
     }
   };
 
-  // Ping handling is now done in onopen handler
+  const addMessageHandler = useCallback((handler: (message: WebSocketMessage) => void) => {
+    messageHandlers.current.add(handler);
+    return () => {
+      messageHandlers.current.delete(handler);
+    };
+  }, []);
 
-  return { isConnected, sendMessage };
+  return (
+    <WebSocketContext.Provider value={{ isConnected, sendMessage, addMessageHandler }}>
+      {children}
+    </WebSocketContext.Provider>
+  );
 }

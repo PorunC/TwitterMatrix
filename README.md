@@ -169,8 +169,9 @@ interface InteractionConfig {
 ### 常见问题
 
 **WebSocket连接错误**
-- 开发环境中的频繁连接断开是正常现象
-- 不影响应用功能，可以忽略控制台错误
+- 检查侧边栏的连接状态指示器（绿色WiFi图标表示已连接）
+- 生产环境需要正确配置反向代理（参见 WEBSOCKET_PRODUCTION_NOTES.md）
+- 确保防火墙允许WebSocket连接
 
 **API调用失败**
 - 检查API密钥是否正确配置
