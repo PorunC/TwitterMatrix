@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { botService } from "./services/botService";
+import { botInteractionService } from "./services/botInteractionService";
 import { TwitterService } from "./services/twitterService";
 import { LLMService } from "./services/llmService";
 import { insertBotSchema, insertActivitySchema } from "@shared/schema";
@@ -64,6 +65,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (bot.isActive) {
         await botService.startBot(bot.id);
+        
+        // Start bot interactions if enabled
+        if (bot.enableInteraction) {
+          await botInteractionService.startBotInteractions(bot.id);
+        }
       }
       
       broadcast({ type: 'bot_created', bot });
@@ -86,8 +92,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Restart bot if it was updated
       if (bot.isActive) {
         await botService.startBot(bot.id);
+        
+        // Start/stop bot interactions based on settings
+        if (bot.enableInteraction) {
+          await botInteractionService.startBotInteractions(bot.id);
+        } else {
+          botInteractionService.stopBotInteractions(bot.id);
+        }
       } else {
         botService.stopBot(bot.id);
+        botInteractionService.stopBotInteractions(bot.id);
       }
       
       broadcast({ type: 'bot_updated', bot });
@@ -101,6 +115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       botService.stopBot(id);
+      botInteractionService.stopBotInteractions(id);
       const deleted = await storage.deleteBot(id);
       
       if (!deleted) {
@@ -160,6 +175,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           if (bot.isActive) {
             await botService.startBot(bot.id);
+            
+            // Start bot interactions if enabled
+            if (bot.enableInteraction) {
+              await botInteractionService.startBotInteractions(bot.id);
+            }
           }
         } catch (error: any) {
           errors.push({ row: index + 1, error: error.message });
@@ -227,6 +247,59 @@ CryptoBot,加密货币专家机器人,@cryptobot2024,your_auth_token_here,"加�
       
       broadcast({ type: 'bot_resumed', bot });
       res.json(bot);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Bot interaction routes
+  app.get("/api/bots/:id/interactions", async (req, res) => {
+    try {
+      const botId = parseInt(req.params.id);
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      
+      const interactions = await storage.getBotInteractions(botId, limit);
+      res.json(interactions);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/interactions", async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const interactions = await storage.getBotInteractions(undefined, limit);
+      res.json(interactions);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/bots/:id/interaction-stats", async (req, res) => {
+    try {
+      const botId = parseInt(req.params.id);
+      const stats = await botInteractionService.getBotInteractionStats(botId);
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/bots/:id/interactions/start", async (req, res) => {
+    try {
+      const botId = parseInt(req.params.id);
+      await botInteractionService.startBotInteractions(botId);
+      res.json({ success: true, message: "Bot interactions started" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/bots/:id/interactions/stop", async (req, res) => {
+    try {
+      const botId = parseInt(req.params.id);
+      botInteractionService.stopBotInteractions(botId);
+      res.json({ success: true, message: "Bot interactions stopped" });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

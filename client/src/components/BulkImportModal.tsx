@@ -112,8 +112,25 @@ export function BulkImportModal({ open, onOpenChange }: BulkImportModalProps) {
             </CardHeader>
             <CardContent>
               <p className="text-gray-300 mb-4">
-                下载CSV模板文件，填写机器人信息后上传导入
+                下载CSV模板文件，填写机器人信息后上传导入。模板包含机器人互动配置字段，支持设置机器人之间的互动行为。
               </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="bg-slate-800 p-3 rounded-lg">
+                  <h4 className="text-sm font-medium text-white mb-2">必填字段</h4>
+                  <ul className="text-xs text-gray-300 space-y-1">
+                    <li>• name - 机器人名称</li>
+                  </ul>
+                </div>
+                <div className="bg-slate-800 p-3 rounded-lg">
+                  <h4 className="text-sm font-medium text-white mb-2">互动配置字段</h4>
+                  <ul className="text-xs text-gray-300 space-y-1">
+                    <li>• enableInteraction - 启用互动 (true/false)</li>
+                    <li>• interactionFrequency - 互动频率 (分钟)</li>
+                    <li>• interactionTargets - 目标机器人ID (逗号分隔)</li>
+                    <li>• interactionBehavior - 互动行为 (friendly/neutral/aggressive/analytical)</li>
+                  </ul>
+                </div>
+              </div>
               <Button 
                 onClick={downloadTemplate} 
                 className="bg-blue-600 hover:bg-blue-700"
