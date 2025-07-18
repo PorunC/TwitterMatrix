@@ -27,34 +27,46 @@ interface BotInteractionPanelProps {
 }
 
 export function BotInteractionPanel({ botId }: BotInteractionPanelProps) {
-  const [selectedBot, setSelectedBot] = useState<string>(botId?.toString() || '');
+  const [selectedBot, setSelectedBot] = useState<string>(botId?.toString() || 'all');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Fetch bots
   const { data: bots = [] } = useQuery({
     queryKey: ['/api/bots'],
-    queryFn: () => apiRequest('/api/bots'),
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/bots');
+      return response.json();
+    },
   });
 
   // Fetch bot interactions
   const { data: interactions = [], isLoading: interactionsLoading } = useQuery({
     queryKey: ['/api/interactions', selectedBot],
-    queryFn: () => selectedBot ? 
-      apiRequest(`/api/bots/${selectedBot}/interactions?limit=50`) :
-      apiRequest('/api/interactions?limit=50'),
+    queryFn: async () => {
+      const response = selectedBot && selectedBot !== 'all' ? 
+        await apiRequest('GET', `/api/bots/${selectedBot}/interactions?limit=50`) :
+        await apiRequest('GET', '/api/interactions?limit=50');
+      return response.json();
+    },
     enabled: true,
   });
 
   // Fetch interaction stats
   const { data: stats } = useQuery({
     queryKey: ['/api/bots', selectedBot, 'interaction-stats'],
-    queryFn: () => apiRequest(`/api/bots/${selectedBot}/interaction-stats`),
-    enabled: !!selectedBot,
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/bots/${selectedBot}/interaction-stats`);
+      return response.json();
+    },
+    enabled: !!selectedBot && selectedBot !== 'all',
   });
 
   const startInteractions = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/bots/${id}/interactions/start`, { method: 'POST' }),
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('POST', `/api/bots/${id}/interactions/start`);
+      return response.json();
+    },
     onSuccess: () => {
       toast({ title: "机器人互动已启动", description: "机器人将开始与其他机器人互动" });
       queryClient.invalidateQueries({ queryKey: ['/api/interactions'] });
@@ -65,7 +77,10 @@ export function BotInteractionPanel({ botId }: BotInteractionPanelProps) {
   });
 
   const stopInteractions = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/bots/${id}/interactions/stop`, { method: 'POST' }),
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('POST', `/api/bots/${id}/interactions/stop`);
+      return response.json();
+    },
     onSuccess: () => {
       toast({ title: "机器人互动已停止", description: "机器人已停止与其他机器人互动" });
       queryClient.invalidateQueries({ queryKey: ['/api/interactions'] });
@@ -104,7 +119,7 @@ export function BotInteractionPanel({ botId }: BotInteractionPanelProps) {
               <SelectValue placeholder="选择机器人..." />
             </SelectTrigger>
             <SelectContent className="bg-slate-700 border-slate-600">
-              <SelectItem value="">所有机器人</SelectItem>
+              <SelectItem value="all">所有机器人</SelectItem>
               {bots.map((bot: any) => (
                 <SelectItem key={bot.id} value={bot.id.toString()}>
                   {bot.name}
