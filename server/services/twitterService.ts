@@ -14,20 +14,25 @@ export class TwitterService {
     try {
       await storage.incrementApiCall('twitter', endpoint);
       
-      const token = authToken || this.apiKey;
+      // Use the main API key for authentication, not the bot's auth token
       const response = await axios({
         method,
         url: `${this.baseUrl}${endpoint}`,
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
-        data,
+        data: {
+          ...data,
+          // Include the bot's auth token in the request data if provided
+          ...(authToken ? { auth_token: authToken } : {})
+        },
       });
       
       return response.data;
     } catch (error: any) {
-      throw new Error(`Twitter API Error: ${error.response?.data?.message || error.message}`);
+      const errorMessage = error.response?.data?.msg || error.response?.data?.message || error.message;
+      throw new Error(`Twitter API Error: ${errorMessage}`);
     }
   }
 
@@ -228,7 +233,7 @@ export class TwitterService {
 
   async checkApiLimits() {
     try {
-      const result = await this.makeRequest('/check-remaining-calls');
+      const result = await this.makeRequest('/api/check-remaining-calls');
       return result;
     } catch (error: any) {
       throw error;
