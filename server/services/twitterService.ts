@@ -14,19 +14,15 @@ export class TwitterService {
     try {
       await storage.incrementApiCall('twitter', endpoint);
       
-      // Use the main API key for authentication, not the bot's auth token
       const response = await axios({
         method,
         url: `${this.baseUrl}${endpoint}`,
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
+          'apikey': this.apiKey,
+          'AuthToken': authToken || '',
         },
-        data: {
-          ...data,
-          // Include the bot's auth token in the request data if provided
-          ...(authToken ? { auth_token: authToken } : {})
-        },
+        data,
       });
       
       return response.data;
@@ -50,7 +46,9 @@ export class TwitterService {
       }
       
       const result = await this.makeRequest('/graphql/CreateTweet', 'POST', {
-        text: content,
+        variables: {
+          tweet_text: content,
+        }
       }, authToken);
       
       await storage.createActivity({
@@ -126,10 +124,12 @@ export class TwitterService {
       }
       
       const result = await this.makeRequest('/graphql/CreateTweet', 'POST', {
-        text: content,
-        reply: {
-          in_reply_to_tweet_id: tweetId,
-        },
+        variables: {
+          tweet_text: content,
+          reply: {
+            in_reply_to_tweet_id: tweetId,
+          },
+        }
       }, authToken);
       
       await storage.createActivity({
@@ -233,7 +233,8 @@ export class TwitterService {
 
   async checkApiLimits() {
     try {
-      const result = await this.makeRequest('/api/check-remaining-calls');
+      // For testing purposes, we'll use a simple endpoint that doesn't require auth token
+      const result = await this.makeRequest('/check-remaining-calls', 'GET');
       return result;
     } catch (error: any) {
       throw error;
