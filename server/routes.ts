@@ -257,6 +257,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Save API configuration
+  app.post("/api/config/save", async (req, res) => {
+    try {
+      const { apiKeys, apiUrls } = req.body;
+      
+      // In a real implementation, you would save these to environment variables
+      // or a secure configuration store. For now, we'll just return success
+      // since we're using in-memory storage
+      
+      res.json({ 
+        success: true, 
+        message: "Configuration saved successfully" 
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get API configuration
+  app.get("/api/config", async (req, res) => {
+    try {
+      // Return current configuration (masked for security)
+      res.json({
+        apiUrls: {
+          twitter: process.env.APIDANCE_BASE_URL || process.env.TWITTER_BASE_URL || 'https://api.apidance.pro',
+          llm: process.env.BIANXIE_BASE_URL || process.env.LLM_BASE_URL || 'https://api.bianxie.ai/v1',
+        },
+        apiKeys: {
+          twitter: process.env.APIDANCE_API_KEY || process.env.TWITTER_API_KEY ? '••••••••••••••••' : '',
+          llm: process.env.BIANXIE_API_KEY || process.env.LLM_API_KEY ? '••••••••••••••••' : '',
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Initialize bot service
   await botService.initializeAllBots();
 

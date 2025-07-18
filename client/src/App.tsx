@@ -20,12 +20,12 @@ function AppContent() {
 
   const apiStatus = {
     twitter: {
-      calls: usage?.twitter?.callsCount || 0,
-      limit: usage?.twitter?.dailyLimit || 1000,
+      calls: (usage as any)?.twitter?.callsCount || 0,
+      limit: (usage as any)?.twitter?.dailyLimit || 1000,
     },
     llm: {
-      calls: usage?.llm?.callsCount || 0,
-      limit: usage?.llm?.dailyLimit || 100,
+      calls: (usage as any)?.llm?.callsCount || 0,
+      limit: (usage as any)?.llm?.dailyLimit || 100,
     },
   };
 

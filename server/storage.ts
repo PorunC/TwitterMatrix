@@ -114,7 +114,14 @@ export class MemStorage implements IStorage {
   async createBot(insertBot: InsertBot): Promise<Bot> {
     const id = this.currentBotId++;
     const bot: Bot = { 
-      ...insertBot, 
+      ...insertBot,
+      description: insertBot.description || null,
+      isActive: insertBot.isActive ?? true,
+      twitterUsername: insertBot.twitterUsername || null,
+      topics: insertBot.topics || null,
+      personality: insertBot.personality || null,
+      postFrequency: insertBot.postFrequency || 60,
+      lastTweetTime: insertBot.lastTweetTime || null,
       id,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -156,6 +163,12 @@ export class MemStorage implements IStorage {
     const id = this.currentActivityId++;
     const activity: Activity = {
       ...insertActivity,
+      content: insertActivity.content || null,
+      botId: insertActivity.botId || null,
+      tweetId: insertActivity.tweetId || null,
+      targetUser: insertActivity.targetUser || null,
+      errorMessage: insertActivity.errorMessage || null,
+      metadata: insertActivity.metadata || null,
       id,
       createdAt: new Date(),
     };
@@ -197,7 +210,7 @@ export class MemStorage implements IStorage {
 
   async incrementApiCall(service: string, endpoint: string): Promise<void> {
     const existing = this.apiUsage.get(service);
-    if (existing) {
+    if (existing && existing.callsCount !== null) {
       existing.callsCount++;
       this.apiUsage.set(service, existing);
     }

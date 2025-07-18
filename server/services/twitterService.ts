@@ -1,13 +1,13 @@
 import axios from 'axios';
 import { storage } from '../storage';
 
-const APIDANCE_BASE_URL = 'https://api.apidance.pro';
-
 export class TwitterService {
   private apiKey: string;
+  private baseUrl: string;
 
   constructor() {
     this.apiKey = process.env.APIDANCE_API_KEY || process.env.TWITTER_API_KEY || '';
+    this.baseUrl = process.env.APIDANCE_BASE_URL || process.env.TWITTER_BASE_URL || 'https://api.apidance.pro';
   }
 
   private async makeRequest(endpoint: string, method = 'GET', data?: any) {
@@ -16,7 +16,7 @@ export class TwitterService {
       
       const response = await axios({
         method,
-        url: `${APIDANCE_BASE_URL}${endpoint}`,
+        url: `${this.baseUrl}${endpoint}`,
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',

@@ -15,10 +15,26 @@ export default function ApiSettings() {
     twitter: "",
     llm: "",
   });
+  const [apiUrls, setApiUrls] = useState({
+    twitter: "https://api.apidance.pro",
+    llm: "https://api.bianxie.ai/v1",
+  });
   const { toast } = useToast();
 
   const { data: usage } = useQuery({
     queryKey: ["/api/usage"],
+  });
+
+  const { data: config } = useQuery({
+    queryKey: ["/api/config"],
+    onSuccess: (data: any) => {
+      if (data.apiUrls) {
+        setApiUrls(data.apiUrls);
+      }
+      if (data.apiKeys) {
+        setApiKeys(data.apiKeys);
+      }
+    },
   });
 
   const testConnection = useMutation({
@@ -36,6 +52,29 @@ export default function ApiSettings() {
       toast({ 
         title: "Connection failed", 
         description: `${service} API: ${error.message}`,
+        variant: "destructive"
+      });
+    },
+  });
+
+  const saveConfiguration = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/config/save", {
+        apiKeys,
+        apiUrls,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ 
+        title: "Configuration saved", 
+        description: "API settings have been updated successfully" 
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Save failed", 
+        description: error.message,
         variant: "destructive"
       });
     },
@@ -67,8 +106,19 @@ export default function ApiSettings() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
+              <Label htmlFor="twitter-url" className="text-sm font-medium text-gray-300">
+                Twitter API Base URL
+              </Label>
+              <Input
+                id="twitter-url"
+                type="text"
+                value={apiUrls.twitter}
+                onChange={(e) => setApiUrls(prev => ({ ...prev, twitter: e.target.value }))}
+                className="bg-slate-700 border-slate-600 text-white mb-2"
+                placeholder="https://api.apidance.pro"
+              />
               <Label htmlFor="twitter-key" className="text-sm font-medium text-gray-300">
-                apidance.pro API Key
+                Twitter API Key
               </Label>
               <div className="relative mt-2">
                 <Input
@@ -101,8 +151,19 @@ export default function ApiSettings() {
             </div>
 
             <div>
+              <Label htmlFor="llm-url" className="text-sm font-medium text-gray-300">
+                LLM API Base URL
+              </Label>
+              <Input
+                id="llm-url"
+                type="text"
+                value={apiUrls.llm}
+                onChange={(e) => setApiUrls(prev => ({ ...prev, llm: e.target.value }))}
+                className="bg-slate-700 border-slate-600 text-white mb-2"
+                placeholder="https://api.bianxie.ai/v1"
+              />
               <Label htmlFor="llm-key" className="text-sm font-medium text-gray-300">
-                bianxie.ai API Key
+                LLM API Key
               </Label>
               <div className="relative mt-2">
                 <Input
@@ -131,6 +192,16 @@ export default function ApiSettings() {
               >
                 <TestTube className="h-4 w-4 mr-2" />
                 Test Connection
+              </Button>
+            </div>
+            
+            <div className="pt-4 border-t border-slate-600">
+              <Button 
+                onClick={() => saveConfiguration.mutate()}
+                disabled={saveConfiguration.isPending}
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+              >
+                {saveConfiguration.isPending ? "Saving..." : "Save Configuration"}
               </Button>
             </div>
           </CardContent>
@@ -212,18 +283,20 @@ export default function ApiSettings() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <h4 className="font-semibold text-white mb-2">Twitter API Limits</h4>
+              <h4 className="font-semibold text-white mb-2">Twitter API Configuration</h4>
               <ul className="text-sm text-gray-400 space-y-1">
-                <li>• 1000 calls per day</li>
+                <li>• Base URL: {apiUrls.twitter}</li>
+                <li>• 1000 calls per day default</li>
                 <li>• 15 tweets per 15 minutes</li>
                 <li>• 300 likes per hour</li>
                 <li>• 50 follows per day</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-white mb-2">LLM API Limits</h4>
+              <h4 className="font-semibold text-white mb-2">LLM API Configuration</h4>
               <ul className="text-sm text-gray-400 space-y-1">
-                <li>• 100 calls per day</li>
+                <li>• Base URL: {apiUrls.llm}</li>
+                <li>• 100 calls per day default</li>
                 <li>• 20 calls per hour</li>
                 <li>• 4000 tokens per request</li>
                 <li>• GPT-4o model access</li>

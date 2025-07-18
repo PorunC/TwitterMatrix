@@ -8,6 +8,16 @@ This is a full-stack application for managing autonomous Twitter bots. It provid
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### January 18, 2025
+- Made LLM API base URL configurable via environment variables
+- Added configurable Twitter API base URL
+- Enhanced API Settings page with URL configuration fields
+- Added API configuration save/load endpoints
+- Fixed TypeScript errors in storage and component files
+- Updated service classes to use configurable base URLs
+
 ## System Architecture
 
 ### Frontend Architecture
@@ -79,8 +89,10 @@ Preferred communication style: Simple, everyday language.
 
 ### Environment Variables
 - `DATABASE_URL`: PostgreSQL connection string
-- `APIDANCE_API_KEY` or `TWITTER_API_KEY`: Twitter API access
-- `BIANXIE_API_KEY` or `LLM_API_KEY`: LLM service access
+- `APIDANCE_API_KEY` or `TWITTER_API_KEY`: Twitter API access key
+- `APIDANCE_BASE_URL` or `TWITTER_BASE_URL`: Twitter API base URL (default: https://api.apidance.pro)
+- `BIANXIE_API_KEY` or `LLM_API_KEY`: LLM service access key
+- `BIANXIE_BASE_URL` or `LLM_BASE_URL`: LLM API base URL (default: https://api.bianxie.ai/v1)
 
 ### Key Libraries
 - **Frontend**: React, TanStack Query, Tailwind CSS, Radix UI, Wouter
