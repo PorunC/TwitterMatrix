@@ -8,8 +8,11 @@ import {
   Home, 
   List, 
   Settings,
-  Users
+  Users,
+  Wifi,
+  WifiOff
 } from "lucide-react";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
@@ -30,6 +33,7 @@ interface SidebarProps {
 
 export function Sidebar({ apiStatus }: SidebarProps) {
   const [location] = useLocation();
+  const { isConnected } = useWebSocket();
 
   return (
     <div className="fixed inset-y-0 left-0 z-50 w-64 bg-slate-800 border-r border-slate-700">
@@ -68,8 +72,20 @@ export function Sidebar({ apiStatus }: SidebarProps) {
         <div className="p-4 border-t border-slate-700">
           <div className="bg-slate-700 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-gray-300">API Status</span>
-              <span className="text-xs text-green-400">Active</span>
+              <span className="text-xs font-medium text-gray-300">连接状态</span>
+              <div className="flex items-center space-x-2">
+                {isConnected ? (
+                  <>
+                    <Wifi className="h-3 w-3 text-green-400" />
+                    <span className="text-xs text-green-400">已连接</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="h-3 w-3 text-red-400" />
+                    <span className="text-xs text-red-400">已断开</span>
+                  </>
+                )}
+              </div>
             </div>
             <div className="space-y-1">
               <div className="flex justify-between text-xs">
