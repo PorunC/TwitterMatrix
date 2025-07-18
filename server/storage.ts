@@ -12,6 +12,8 @@ import {
   type ApiUsage,
   type InsertApiUsage
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -217,4 +219,150 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  constructor() {
+    this.initializeApiUsage();
+  }
+
+  private async initializeApiUsage() {
+    // Check if API usage records exist, if not create them
+    const twitterUsage = await this.getApiUsage('twitter');
+    if (!twitterUsage) {
+      await this.updateApiUsage('twitter', {
+        endpoint: 'general',
+        callsCount: 0,
+        dailyLimit: 1000,
+      });
+    }
+
+    const llmUsage = await this.getApiUsage('llm');
+    if (!llmUsage) {
+      await this.updateApiUsage('llm', {
+        endpoint: 'general',
+        callsCount: 0,
+        dailyLimit: 100,
+      });
+    }
+  }
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async getAllBots(): Promise<Bot[]> {
+    return await db.select().from(bots).orderBy(desc(bots.createdAt));
+  }
+
+  async getBot(id: number): Promise<Bot | undefined> {
+    const [bot] = await db.select().from(bots).where(eq(bots.id, id));
+    return bot || undefined;
+  }
+
+  async createBot(insertBot: InsertBot): Promise<Bot> {
+    const [bot] = await db
+      .insert(bots)
+      .values(insertBot)
+      .returning();
+    return bot;
+  }
+
+  async updateBot(id: number, botUpdate: Partial<InsertBot>): Promise<Bot | undefined> {
+    const [bot] = await db
+      .update(bots)
+      .set({
+        ...botUpdate,
+        updatedAt: new Date(),
+      })
+      .where(eq(bots.id, id))
+      .returning();
+    return bot || undefined;
+  }
+
+  async deleteBot(id: number): Promise<boolean> {
+    const result = await db.delete(bots).where(eq(bots.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getActivities(limit = 50, botId?: number): Promise<Activity[]> {
+    const query = db.select().from(activities);
+    
+    if (botId) {
+      query.where(eq(activities.botId, botId));
+    }
+    
+    return await query
+      .orderBy(desc(activities.createdAt))
+      .limit(limit);
+  }
+
+  async createActivity(insertActivity: InsertActivity): Promise<Activity> {
+    const [activity] = await db
+      .insert(activities)
+      .values(insertActivity)
+      .returning();
+    return activity;
+  }
+
+  async getActivitiesByBot(botId: number, limit = 50): Promise<Activity[]> {
+    return await db.select()
+      .from(activities)
+      .where(eq(activities.botId, botId))
+      .orderBy(desc(activities.createdAt))
+      .limit(limit);
+  }
+
+  async getApiUsage(service: string): Promise<ApiUsage | undefined> {
+    const [usage] = await db.select().from(apiUsage).where(eq(apiUsage.service, service));
+    return usage || undefined;
+  }
+
+  async updateApiUsage(service: string, usage: Partial<InsertApiUsage>): Promise<ApiUsage> {
+    const existing = await this.getApiUsage(service);
+    
+    if (!existing) {
+      const [newUsage] = await db
+        .insert(apiUsage)
+        .values({
+          service,
+          endpoint: usage.endpoint || 'general',
+          callsCount: usage.callsCount || 0,
+          lastReset: usage.lastReset || new Date(),
+          dailyLimit: usage.dailyLimit || 1000,
+        })
+        .returning();
+      return newUsage;
+    }
+    
+    const [updated] = await db
+      .update(apiUsage)
+      .set(usage)
+      .where(eq(apiUsage.service, service))
+      .returning();
+    return updated;
+  }
+
+  async incrementApiCall(service: string, endpoint: string): Promise<void> {
+    const existing = await this.getApiUsage(service);
+    if (existing && existing.callsCount !== null) {
+      await db
+        .update(apiUsage)
+        .set({ callsCount: existing.callsCount + 1 })
+        .where(eq(apiUsage.service, service));
+    }
+  }
+}
+
+export const storage = new DatabaseStorage();

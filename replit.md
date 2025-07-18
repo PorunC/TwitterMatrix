@@ -17,6 +17,10 @@ Preferred communication style: Simple, everyday language.
 - Added API configuration save/load endpoints
 - Fixed TypeScript errors in storage and component files
 - Updated service classes to use configurable base URLs
+- Integrated PostgreSQL database with full schema migration
+- Added database relations for bots and activities
+- Replaced in-memory storage with persistent database storage
+- Successfully deployed database schema with all tables
 
 ## System Architecture
 
