@@ -22,6 +22,7 @@ export default function BotManagement() {
     personality: "professional",
     postFrequency: 60,
     twitterUsername: "",
+    twitterAuthToken: "",
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -49,6 +50,7 @@ export default function BotManagement() {
         personality: "professional",
         postFrequency: 60,
         twitterUsername: "",
+        twitterAuthToken: "",
       });
     },
     onError: (error: any) => {
@@ -102,6 +104,22 @@ export default function BotManagement() {
                     placeholder="@username"
                   />
                 </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="twitterAuthToken">Twitter Auth Token</Label>
+                <Input
+                  id="twitterAuthToken"
+                  type="password"
+                  value={formData.twitterAuthToken}
+                  onChange={(e) => setFormData({ ...formData, twitterAuthToken: e.target.value })}
+                  className="bg-slate-700 border-slate-600 text-white"
+                  placeholder="Enter Twitter auth token"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This token will be used for Twitter API authentication
+                </p>
               </div>
               
               <div>

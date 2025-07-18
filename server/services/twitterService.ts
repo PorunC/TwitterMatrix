@@ -10,15 +10,16 @@ export class TwitterService {
     this.baseUrl = process.env.APIDANCE_BASE_URL || process.env.TWITTER_BASE_URL || 'https://api.apidance.pro';
   }
 
-  private async makeRequest(endpoint: string, method = 'GET', data?: any) {
+  private async makeRequest(endpoint: string, method = 'GET', data?: any, authToken?: string) {
     try {
       await storage.incrementApiCall('twitter', endpoint);
       
+      const token = authToken || this.apiKey;
       const response = await axios({
         method,
         url: `${this.baseUrl}${endpoint}`,
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         data,
@@ -32,9 +33,20 @@ export class TwitterService {
 
   async postTweet(content: string, botId: number) {
     try {
+      // Get bot's auth token
+      const bot = await storage.getBot(botId);
+      if (!bot) {
+        throw new Error('Bot not found');
+      }
+      
+      const authToken = bot.twitterAuthToken;
+      if (!authToken) {
+        throw new Error('Bot does not have a Twitter auth token');
+      }
+      
       const result = await this.makeRequest('/graphql/CreateTweet', 'POST', {
         text: content,
-      });
+      }, authToken);
       
       await storage.createActivity({
         botId,
@@ -59,9 +71,20 @@ export class TwitterService {
 
   async likeTweet(tweetId: string, botId: number) {
     try {
+      // Get bot's auth token
+      const bot = await storage.getBot(botId);
+      if (!bot) {
+        throw new Error('Bot not found');
+      }
+      
+      const authToken = bot.twitterAuthToken;
+      if (!authToken) {
+        throw new Error('Bot does not have a Twitter auth token');
+      }
+      
       const result = await this.makeRequest('/graphql/FavoriteTweet', 'POST', {
         tweet_id: tweetId,
-      });
+      }, authToken);
       
       await storage.createActivity({
         botId,
@@ -86,12 +109,23 @@ export class TwitterService {
 
   async replyToTweet(tweetId: string, content: string, botId: number) {
     try {
+      // Get bot's auth token
+      const bot = await storage.getBot(botId);
+      if (!bot) {
+        throw new Error('Bot not found');
+      }
+      
+      const authToken = bot.twitterAuthToken;
+      if (!authToken) {
+        throw new Error('Bot does not have a Twitter auth token');
+      }
+      
       const result = await this.makeRequest('/graphql/CreateTweet', 'POST', {
         text: content,
         reply: {
           in_reply_to_tweet_id: tweetId,
         },
-      });
+      }, authToken);
       
       await storage.createActivity({
         botId,
@@ -118,9 +152,20 @@ export class TwitterService {
 
   async retweetTweet(tweetId: string, botId: number) {
     try {
+      // Get bot's auth token
+      const bot = await storage.getBot(botId);
+      if (!bot) {
+        throw new Error('Bot not found');
+      }
+      
+      const authToken = bot.twitterAuthToken;
+      if (!authToken) {
+        throw new Error('Bot does not have a Twitter auth token');
+      }
+      
       const result = await this.makeRequest('/graphql/CreateRetweet', 'POST', {
         tweet_id: tweetId,
-      });
+      }, authToken);
       
       await storage.createActivity({
         botId,

@@ -15,6 +15,7 @@ export const bots = pgTable("bots", {
   description: text("description"),
   isActive: boolean("is_active").default(true),
   twitterUsername: text("twitter_username"),
+  twitterAuthToken: text("twitter_auth_token"), // Store Twitter auth token
   topics: text("topics").array(),
   personality: text("personality"),
   postFrequency: integer("post_frequency").default(60), // minutes

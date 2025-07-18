@@ -120,6 +120,7 @@ export class MemStorage implements IStorage {
       description: insertBot.description || null,
       isActive: insertBot.isActive ?? true,
       twitterUsername: insertBot.twitterUsername || null,
+      twitterAuthToken: insertBot.twitterAuthToken || null,
       topics: insertBot.topics || null,
       personality: insertBot.personality || null,
       postFrequency: insertBot.postFrequency || 60,

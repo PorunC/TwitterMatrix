@@ -21,6 +21,9 @@ Preferred communication style: Simple, everyday language.
 - Added database relations for bots and activities
 - Replaced in-memory storage with persistent database storage
 - Successfully deployed database schema with all tables
+- Added Twitter auth token storage for individual bots
+- Updated Twitter service to use bot-specific authentication
+- Enhanced bot creation form with auth token input field
 
 ## System Architecture
 
