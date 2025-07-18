@@ -7,6 +7,8 @@ import { TwitterService } from "./services/twitterService";
 import { LLMService } from "./services/llmService";
 import { insertBotSchema, insertActivitySchema } from "@shared/schema";
 import { z } from "zod";
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -107,6 +109,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       broadcast({ type: 'bot_deleted', botId: id });
       res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Bulk import bots
+  app.post("/api/bots/bulk-import", async (req, res) => {
+    try {
+      const { data, type } = req.body; // data is the file content, type is 'csv' or 'xlsx'
+      let parsedData: any[] = [];
+
+      if (type === 'csv') {
+        const parsed = Papa.parse(data, { header: true, skipEmptyLines: true });
+        parsedData = parsed.data as any[];
+      } else if (type === 'xlsx') {
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        parsedData = XLSX.utils.sheet_to_json(firstSheet);
+      }
+
+      const createdBots = [];
+      const errors = [];
+
+      for (const [index, row] of parsedData.entries()) {
+        try {
+          // Parse topics and interaction targets
+          const topics = row.topics ? row.topics.split(',').map((t: string) => t.trim()) : [];
+          const interactionTargets = row.interactionTargets ? 
+            row.interactionTargets.split(',').map((t: string) => t.trim()) : [];
+
+          const botData = {
+            name: row.name,
+            description: row.description || null,
+            twitterUsername: row.twitterUsername || null,
+            twitterAuthToken: row.twitterAuthToken || null,
+            topics,
+            personality: row.personality || 'professional',
+            postFrequency: parseInt(row.postFrequency) || 60,
+            enableInteraction: row.enableInteraction === 'true' || row.enableInteraction === true,
+            interactionFrequency: parseInt(row.interactionFrequency) || 30,
+            interactionTargets,
+            interactionBehavior: row.interactionBehavior || 'friendly',
+            isActive: true
+          };
+
+          const validatedData = insertBotSchema.parse(botData);
+          const bot = await storage.createBot(validatedData);
+          createdBots.push(bot);
+
+          if (bot.isActive) {
+            await botService.startBot(bot.id);
+          }
+        } catch (error: any) {
+          errors.push({ row: index + 1, error: error.message });
+        }
+      }
+
+      broadcast({ type: 'bots_bulk_imported', bots: createdBots });
+      res.json({ 
+        success: true, 
+        imported: createdBots.length, 
+        errors: errors.length,
+        bots: createdBots,
+        errorDetails: errors
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get bulk import template
+  app.get("/api/bots/import-template", async (req, res) => {
+    try {
+      const template = {
+        csv: `name,description,twitterUsername,twitterAuthToken,topics,personality,postFrequency,enableInteraction,interactionFrequency,interactionTargets,interactionBehavior
+TechBot,专注于科技资讯的机器人,@techbot2024,your_auth_token_here,"科技,AI,区块链",professional,60,true,30,"2,3",friendly
+CryptoBot,加密货币专家机器人,@cryptobot2024,your_auth_token_here,"加密货币,比特币,以太坊",analytical,45,true,25,"1,3",neutral`,
+        fields: [
+          { name: 'name', description: '机器人名称（必填）', required: true },
+          { name: 'description', description: '机器人描述', required: false },
+          { name: 'twitterUsername', description: '推特用户名（如@bot123）', required: false },
+          { name: 'twitterAuthToken', description: '推特认证令牌', required: false },
+          { name: 'topics', description: '话题（逗号分隔）', required: false },
+          { name: 'personality', description: '个性（professional/casual/analytical等）', required: false },
+          { name: 'postFrequency', description: '发布频率（分钟）', required: false },
+          { name: 'enableInteraction', description: '启用互动（true/false）', required: false },
+          { name: 'interactionFrequency', description: '互动频率（分钟）', required: false },
+          { name: 'interactionTargets', description: '互动目标机器人ID（逗号分隔）', required: false },
+          { name: 'interactionBehavior', description: '互动行为（friendly/neutral/aggressive）', required: false }
+        ]
+      };
+      res.json(template);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
