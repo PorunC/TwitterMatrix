@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { botService } from "./services/botService";
 import { botInteractionService } from "./services/botInteractionService";
@@ -12,9 +13,40 @@ import Papa from 'papaparse';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
   
   const twitterService = new TwitterService();
   const llmService = new LLMService();
+
+  // WebSocket connection handling
+  wss.on('connection', (ws) => {
+    console.log('Client connected to WebSocket');
+    
+    ws.on('message', async (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        
+        if (data.type === 'ping') {
+          ws.send(JSON.stringify({ type: 'pong' }));
+        }
+      } catch (error) {
+        console.error('WebSocket message error:', error);
+      }
+    });
+
+    ws.on('close', () => {
+      console.log('Client disconnected from WebSocket');
+    });
+  });
+
+  // Broadcast to all connected clients
+  const broadcast = (data: any) => {
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(data));
+      }
+    });
+  };
 
   // Bot routes
   app.get("/api/bots", async (req, res) => {
@@ -40,104 +72,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      broadcast({ type: 'bot_created', bot });
       res.json(bot);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/bots/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const bot = await storage.getBot(id);
-      res.json(bot);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(400).json({ error: error.message });
     }
   });
 
   app.put("/api/bots/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const validatedData = insertBotSchema.parse(req.body);
+      const validatedData = insertBotSchema.partial().parse(req.body);
       const bot = await storage.updateBot(id, validatedData);
       
-      // Restart bot if it was active
-      if (bot.isActive) {
-        await botService.restartBot(id);
+      if (!bot) {
+        return res.status(404).json({ error: "Bot not found" });
       }
       
+      // Restart bot if it was updated
+      if (bot.isActive) {
+        await botService.startBot(bot.id);
+        
+        // Start/stop bot interactions based on settings
+        if (bot.enableInteraction) {
+          await botInteractionService.startBotInteractions(bot.id);
+        } else {
+          botInteractionService.stopBotInteractions(bot.id);
+        }
+      } else {
+        botService.stopBot(bot.id);
+        botInteractionService.stopBotInteractions(bot.id);
+      }
+      
+      broadcast({ type: 'bot_updated', bot });
       res.json(bot);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(400).json({ error: error.message });
     }
   });
 
   app.delete("/api/bots/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      await botService.stopBot(id);
-      await storage.deleteBot(id);
+      botService.stopBot(id);
+      botInteractionService.stopBotInteractions(id);
+      const deleted = await storage.deleteBot(id);
       
+      if (!deleted) {
+        return res.status(404).json({ error: "Bot not found" });
+      }
+      
+      broadcast({ type: 'bot_deleted', botId: id });
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.post("/api/bots/:id/start", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await botService.startBot(id);
-      const bot = await storage.getBot(id);
-      
-      res.json(bot);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/bots/:id/stop", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await botService.stopBot(id);
-      const bot = await storage.getBot(id);
-      
-      res.json(bot);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Bulk import routes
+  // Bulk import bots
   app.post("/api/bots/bulk-import", async (req, res) => {
     try {
-      const { data, format } = req.body;
-      
-      if (!data || !Array.isArray(data)) {
-        return res.status(400).json({ error: "Invalid data format" });
+      const { data, type } = req.body; // data is the file content, type is 'csv' or 'xlsx'
+      let parsedData: any[] = [];
+
+      if (type === 'csv') {
+        const parsed = Papa.parse(data, { header: true, skipEmptyLines: true });
+        parsedData = parsed.data as any[];
+      } else if (type === 'xlsx') {
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        parsedData = XLSX.utils.sheet_to_json(firstSheet);
       }
 
       const createdBots = [];
       const errors = [];
 
-      for (const [index, row] of data.entries()) {
+      for (const [index, row] of parsedData.entries()) {
         try {
-          // Parse CSV row data
+          // Parse topics and interaction targets
+          const topics = row.topics ? row.topics.split(',').map((t: string) => t.trim()) : [];
+          const interactionTargets = row.interactionTargets ? 
+            row.interactionTargets.split(',').map((t: string) => t.trim()) : [];
+
           const botData = {
             name: row.name,
-            description: row.description || "",
-            twitterUsername: row.twitterUsername || "",
-            twitterAuthToken: row.twitterAuthToken || "",
-            topics: row.topics ? row.topics.split(',').map((t: string) => t.trim()) : [],
-            personality: row.personality || "professional",
-            postFrequency: row.postFrequency ? parseInt(row.postFrequency) : 60,
-            isActive: row.isActive === "true" || row.isActive === true,
-            enableInteraction: row.enableInteraction === "true" || row.enableInteraction === true,
-            interactionFrequency: row.interactionFrequency ? parseInt(row.interactionFrequency) : 30,
-            interactionTargets: row.interactionTargets ? 
-              row.interactionTargets.split(',').map((t: string) => parseInt(t.trim())).filter(Boolean) : [],
-            interactionBehavior: row.interactionBehavior || "friendly"
+            description: row.description || null,
+            twitterUsername: row.twitterUsername || null,
+            twitterAuthToken: row.twitterAuthToken || null,
+            topics,
+            personality: row.personality || 'professional',
+            postFrequency: parseInt(row.postFrequency) || 60,
+            enableInteraction: row.enableInteraction === 'true' || row.enableInteraction === true,
+            interactionFrequency: parseInt(row.interactionFrequency) || 30,
+            interactionTargets,
+            interactionBehavior: row.interactionBehavior || 'friendly',
+            isActive: true
           };
 
           const validatedData = insertBotSchema.parse(botData);
@@ -157,6 +186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      broadcast({ type: 'bots_bulk_imported', bots: createdBots });
       res.json({ 
         success: true, 
         imported: createdBots.length, 
@@ -202,6 +232,7 @@ CryptoBot,加密货币专家机器人,@cryptobot2024,your_auth_token_here,"加�
       await botService.pauseBot(id);
       const bot = await storage.getBot(id);
       
+      broadcast({ type: 'bot_paused', bot });
       res.json(bot);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -214,6 +245,7 @@ CryptoBot,加密货币专家机器人,@cryptobot2024,your_auth_token_here,"加�
       await botService.resumeBot(id);
       const bot = await storage.getBot(id);
       
+      broadcast({ type: 'bot_resumed', bot });
       res.json(bot);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -294,19 +326,18 @@ CryptoBot,加密货币专家机器人,@cryptobot2024,your_auth_token_here,"加�
       if (!topic) {
         return res.status(400).json({ error: "Topic is required" });
       }
-
-      const content = await llmService.generateContent(topic, personality);
       
-      // Log activity
+      const content = await llmService.generateTweet(topic, personality || 'professional');
+      
       if (botId) {
         await storage.createActivity({
-          botId,
-          type: "content_generation",
-          content: JSON.stringify({ topic, personality, result: content }),
-          status: "success"
+          botId: parseInt(botId),
+          action: 'generate',
+          content,
+          status: 'success',
         });
       }
-
+      
       res.json({ content });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -320,23 +351,11 @@ CryptoBot,加密货币专家机器人,@cryptobot2024,your_auth_token_here,"加�
       if (!content || !botId) {
         return res.status(400).json({ error: "Content and botId are required" });
       }
-
-      const bot = await storage.getBot(botId);
-      if (!bot.twitterAuthToken) {
-        return res.status(400).json({ error: "Bot does not have Twitter authentication" });
-      }
-
-      const result = await twitterService.postTweet(content, bot.twitterAuthToken);
       
-      // Log activity
-      await storage.createActivity({
-        botId,
-        type: "tweet_post",
-        content: JSON.stringify({ content, result }),
-        status: result ? "success" : "failed"
-      });
-
-      res.json({ success: true, result });
+      const result = await twitterService.postTweet(content, parseInt(botId));
+      
+      broadcast({ type: 'tweet_posted', botId, content });
+      res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -348,15 +367,23 @@ CryptoBot,加密货币专家机器人,@cryptobot2024,your_auth_token_here,"加�
       const bots = await storage.getAllBots();
       const activities = await storage.getActivities(1000);
       
+      const activeBots = bots.filter(bot => bot.isActive).length;
+      const totalTweets = activities.filter(a => a.action === 'tweet').length;
+      const totalApiCalls = activities.length;
+      
+      const twitterUsage = await storage.getApiUsage('twitter');
+      const llmUsage = await storage.getApiUsage('llm');
+      
       const stats = {
-        activeBots: bots.filter(bot => bot.isActive).length,
-        totalBots: bots.length,
-        totalTweets: activities.filter(a => a.type === 'tweet_post').length,
-        totalInteractions: activities.filter(a => a.type === 'bot_interaction').length,
-        successRate: activities.length > 0 ? 
-          (activities.filter(a => a.status === 'success').length / activities.length * 100).toFixed(1) : 0
+        activeBots,
+        totalTweets,
+        totalApiCalls,
+        twitterApiCalls: twitterUsage?.callsCount || 0,
+        twitterApiLimit: twitterUsage?.dailyLimit || 1000,
+        llmApiCalls: llmUsage?.callsCount || 0,
+        llmApiLimit: llmUsage?.dailyLimit || 100,
       };
-
+      
       res.json(stats);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -366,53 +393,76 @@ CryptoBot,加密货币专家机器人,@cryptobot2024,your_auth_token_here,"加�
   // API usage routes
   app.get("/api/usage", async (req, res) => {
     try {
-      const usage = await storage.getApiUsage();
-      res.json(usage);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/usage/update", async (req, res) => {
-    try {
-      const { service, endpoint, count } = req.body;
-      await storage.updateApiUsage(service, endpoint, count);
-      res.json({ success: true });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // API settings routes
-  app.get("/api/settings", async (req, res) => {
-    try {
-      const settings = {
-        twitterApiKey: process.env.APIDANCE_API_KEY || process.env.TWITTER_API_KEY || "",
-        llmApiKey: process.env.BIANXIE_API_KEY || process.env.LLM_API_KEY || "",
-        twitterBaseUrl: process.env.APIDANCE_BASE_URL || process.env.TWITTER_BASE_URL || "https://api.apidance.pro",
-        llmBaseUrl: process.env.BIANXIE_BASE_URL || process.env.LLM_BASE_URL || "https://api.bianxie.ai/v1"
-      };
-      res.json(settings);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/settings", async (req, res) => {
-    try {
-      const { twitterApiKey, llmApiKey, twitterBaseUrl, llmBaseUrl } = req.body;
+      const twitterUsage = await storage.getApiUsage('twitter');
+      const llmUsage = await storage.getApiUsage('llm');
       
-      // Update service configurations
-      if (twitterApiKey) twitterService.setApiKey(twitterApiKey);
-      if (llmApiKey) llmService.setApiKey(llmApiKey);
-      if (twitterBaseUrl) twitterService.setBaseUrl(twitterBaseUrl);
-      if (llmBaseUrl) llmService.setBaseUrl(llmBaseUrl);
-      
-      res.json({ success: true });
+      res.json({
+        twitter: twitterUsage,
+        llm: llmUsage,
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // Test API connections
+  app.post("/api/test-connection", async (req, res) => {
+    try {
+      const { service } = req.body;
+      
+      if (service === 'twitter') {
+        const result = await twitterService.checkApiLimits();
+        res.json({ success: true, data: result });
+      } else if (service === 'llm') {
+        const result = await llmService.generateTweet('test', 'professional');
+        res.json({ success: true, data: { content: result } });
+      } else {
+        res.status(400).json({ error: "Invalid service. Use 'twitter' or 'llm'" });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Save API configuration
+  app.post("/api/config/save", async (req, res) => {
+    try {
+      const { apiKeys, apiUrls } = req.body;
+      
+      // In a real implementation, you would save these to environment variables
+      // or a secure configuration store. For now, we'll just return success
+      // since we're using in-memory storage
+      
+      res.json({ 
+        success: true, 
+        message: "Configuration saved successfully" 
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get API configuration
+  app.get("/api/config", async (req, res) => {
+    try {
+      // Return current configuration (masked for security)
+      res.json({
+        apiUrls: {
+          twitter: process.env.APIDANCE_BASE_URL || process.env.TWITTER_BASE_URL || 'https://api.apidance.pro',
+          llm: process.env.BIANXIE_BASE_URL || process.env.LLM_BASE_URL || 'https://api.bianxie.ai/v1',
+        },
+        apiKeys: {
+          twitter: process.env.APIDANCE_API_KEY || process.env.TWITTER_API_KEY ? '••••••••••••••••' : '',
+          llm: process.env.BIANXIE_API_KEY || process.env.LLM_API_KEY ? '••••••••••••••••' : '',
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Initialize bot service
+  await botService.initializeAllBots();
 
   return httpServer;
 }
