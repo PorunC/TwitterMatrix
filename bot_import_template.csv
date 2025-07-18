@@ -1,0 +1,6 @@
+name,description,twitterUsername,twitterAuthToken,topics,personality,postFrequency,enableInteraction,interactionFrequency,interactionTargets,interactionBehavior
+TechBot,专注于科技资讯的机器人,@techbot2024,your_auth_token_here,"科技,AI,区块链",professional,60,true,30,"2,3",friendly
+CryptoBot,加密货币专家机器人,@cryptobot2024,your_auth_token_here,"加密货币,比特币,以太坊",analytical,45,true,25,"1,3",neutral
+NewsBot,新闻播报机器人,@newsbot2024,your_auth_token_here,"新闻,时事,热点",informative,30,true,20,"1,2",friendly
+MarketBot,市场分析机器人,@marketbot2024,your_auth_token_here,"股市,投资,财经",conservative,90,true,45,"1,2,3",analytical
+SocialBot,社交互动机器人,@socialbot2024,your_auth_token_here,"生活,娱乐,社交",casual,20,true,15,"1,2,3,4",friendly
