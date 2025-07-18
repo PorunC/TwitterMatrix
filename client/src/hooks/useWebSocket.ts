@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { WebSocketMessage } from '../types';
 
 export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
-  const [isConnected, setIsConnected] = useState(true); // Default to true for better UX
+  const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 3;
+  const maxReconnectAttempts = 5;
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     function connect() {
@@ -26,6 +27,16 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
           setIsConnected(true);
           reconnectAttempts.current = 0; // Reset attempts on successful connection
           console.log('WebSocket connected');
+          
+          // Start ping/pong to keep connection alive
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+          }
+          pingIntervalRef.current = setInterval(() => {
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'ping' }));
+            }
+          }, 25000); // Ping every 25 seconds
         };
 
         wsRef.current.onmessage = (event) => {
@@ -41,14 +52,22 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
           setIsConnected(false);
           console.log('WebSocket disconnected');
           
+          // Clear ping interval
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+            pingIntervalRef.current = null;
+          }
+          
           // Only reconnect if it wasn't a clean close and we haven't exceeded max attempts
           if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts) {
             reconnectAttempts.current++;
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000); // Exponential backoff
+            const delay = Math.min(2000 * reconnectAttempts.current, 10000); // Linear backoff, max 10s
             reconnectTimeoutRef.current = setTimeout(() => {
               console.log(`Attempting to reconnect... (${reconnectAttempts.current}/${maxReconnectAttempts})`);
               connect();
             }, delay);
+          } else if (reconnectAttempts.current >= maxReconnectAttempts) {
+            console.log('Max reconnection attempts reached. Stopping...');
           }
         };
 
@@ -68,8 +87,11 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+      }
       if (wsRef.current) {
-        wsRef.current.close();
+        wsRef.current.close(1000, 'Component unmounting'); // Clean close
       }
     };
   }, [onMessage]);
@@ -80,18 +102,7 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void) {
     }
   };
 
-  // Send ping to keep connection alive
-  useEffect(() => {
-    if (!isConnected) return;
-    
-    const pingInterval = setInterval(() => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'ping' }));
-      }
-    }, 30000); // Ping every 30 seconds
-    
-    return () => clearInterval(pingInterval);
-  }, [isConnected]);
+  // Ping handling is now done in onopen handler
 
   return { isConnected, sendMessage };
 }
