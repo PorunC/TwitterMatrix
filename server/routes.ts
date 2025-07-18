@@ -13,14 +13,41 @@ import Papa from 'papaparse';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  // WebSocket server configuration with production-ready settings
+  const wss = new WebSocketServer({ 
+    server: httpServer, 
+    path: '/ws',
+    perMessageDeflate: false, // Disable compression for better compatibility
+    clientTracking: true,
+    maxPayload: 1024 * 1024 // 1MB max message size
+  });
   
   const twitterService = new TwitterService();
   const llmService = new LLMService();
 
-  // WebSocket connection handling
-  wss.on('connection', (ws) => {
+  // WebSocket connection handling with better error handling
+  wss.on('connection', (ws, req) => {
     console.log('Client connected to WebSocket');
+    
+    // Send initial connection success message
+    ws.send(JSON.stringify({ type: 'connected' }));
+    
+    // Set up ping/pong for keep-alive
+    let isAlive = true;
+    ws.on('pong', () => {
+      isAlive = true;
+    });
+    
+    const pingInterval = setInterval(() => {
+      if (!isAlive) {
+        console.log('WebSocket client not responding to ping, terminating connection');
+        ws.terminate();
+        return;
+      }
+      isAlive = false;
+      ws.ping();
+    }, 30000); // Ping every 30 seconds
     
     ws.on('message', async (message) => {
       try {
@@ -36,6 +63,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     ws.on('close', () => {
       console.log('Client disconnected from WebSocket');
+      clearInterval(pingInterval);
+    });
+    
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+      clearInterval(pingInterval);
     });
   });
 

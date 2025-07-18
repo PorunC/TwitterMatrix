@@ -13,6 +13,7 @@ import ApiSettings from "./pages/ApiSettings";
 import ActivityLogs from "./pages/ActivityLogs";
 import BotInteractions from "./pages/BotInteractions";
 import NotFound from "@/pages/not-found";
+import { WebSocketProvider } from "./contexts/WebSocketContext";
 
 function AppContent() {
   const { data: usage } = useQuery({
@@ -52,10 +53,12 @@ function AppContent() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <AppContent />
-      </TooltipProvider>
+      <WebSocketProvider>
+        <TooltipProvider>
+          <Toaster />
+          <AppContent />
+        </TooltipProvider>
+      </WebSocketProvider>
     </QueryClientProvider>
   );
 }

@@ -10,7 +10,8 @@ import { BotCard } from "../components/BotCard";
 import { ActivityFeed } from "../components/ActivityFeed";
 import { ContentGenerationModal } from "../components/ContentGenerationModal";
 import { Bot as BotType, Activity, Stats } from "../types";
-import { useWebSocket } from "../hooks/useWebSocket";
+import { useWebSocket } from "@/contexts/WebSocketContext";
+import { useEffect } from "react";
 
 export default function Dashboard() {
   const [showContentModal, setShowContentModal] = useState(false);
@@ -27,10 +28,16 @@ export default function Dashboard() {
     queryKey: ["/api/analytics/stats"],
   });
 
-  const { isConnected } = useWebSocket((message) => {
-    // Handle real-time updates
-    console.log("WebSocket message:", message);
-  });
+  const { isConnected, addMessageHandler } = useWebSocket();
+  
+  useEffect(() => {
+    const removeHandler = addMessageHandler((message) => {
+      // Handle real-time updates
+      console.log("Dashboard WebSocket message:", message);
+    });
+    
+    return removeHandler;
+  }, [addMessageHandler]);
 
   const activeBots = bots.filter(bot => bot.isActive);
   const recentActivities = activities.slice(0, 5);

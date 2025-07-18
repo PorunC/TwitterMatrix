@@ -6,6 +6,18 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Trust proxy for production deployments (important for WebSocket)
+app.set('trust proxy', true);
+
+// Add CORS headers for WebSocket upgrade requests
+app.use((req, res, next) => {
+  if (req.headers.upgrade === 'websocket') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
