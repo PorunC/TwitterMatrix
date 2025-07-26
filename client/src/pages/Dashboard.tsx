@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Bell } from "lucide-react";
+import { Plus, Bell, Users, PlayCircle, PauseCircle, Zap } from "lucide-react";
 import { Bot, Cloud, Heart, Twitter } from "lucide-react";
 import { StatsCard } from "../components/StatsCard";
 import { BotCard } from "../components/BotCard";
@@ -12,9 +12,13 @@ import { ContentGenerationModal } from "../components/ContentGenerationModal";
 import { Bot as BotType, Activity, Stats } from "../types";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import { useEffect } from "react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
   const [showContentModal, setShowContentModal] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: bots = [] } = useQuery<BotType[]>({
     queryKey: ["/api/bots"],
@@ -41,6 +45,36 @@ export default function Dashboard() {
 
   const activeBots = bots.filter(bot => bot.isActive);
   const recentActivities = activities.slice(0, 5);
+  const interactionEnabledBots = bots.filter(bot => bot.enableInteraction);
+
+  // Batch interaction controls
+  const startAllInteractions = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/interactions/start-all');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "批量启动成功", description: `已启动 ${data.started} 个机器人的互动功能` });
+      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "批量启动失败", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const stopAllInteractions = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/interactions/stop-all');
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "批量停止成功", description: "已停止所有机器人的互动功能" });
+      queryClient.invalidateQueries({ queryKey: ["/api/bots"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "批量停止失败", description: error.message, variant: "destructive" });
+    }
+  });
 
   return (
     <div className="p-6">
@@ -56,7 +90,7 @@ export default function Dashboard() {
             className="bg-blue-600 hover:bg-blue-700"
           >
             <Plus className="h-4 w-4 mr-2" />
-            New Bot
+            New Post
           </Button>
           <div className="relative">
             <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
@@ -178,6 +212,55 @@ export default function Dashboard() {
                 <Button className="w-full bg-blue-600 hover:bg-blue-700">
                   Test Connection
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bot Interactions Control */}
+          <Card className="bg-slate-800 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center">
+                <Users className="h-5 w-5 mr-2" />
+                机器人互动控制
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-400">
+                    {interactionEnabledBots.length}
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    启用互动的机器人
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Button 
+                    className="w-full bg-green-600 hover:bg-green-700"
+                    onClick={() => startAllInteractions.mutate()}
+                    disabled={startAllInteractions.isPending}
+                  >
+                    <PlayCircle className="h-4 w-4 mr-2" />
+                    启动全部互动
+                  </Button>
+                  <Button 
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => stopAllInteractions.mutate()}
+                    disabled={stopAllInteractions.isPending}
+                  >
+                    <PauseCircle className="h-4 w-4 mr-2" />
+                    停止全部互动
+                  </Button>
+                  <Button 
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    onClick={() => window.open('/bot-interactions', '_blank')}
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    管理互动
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
