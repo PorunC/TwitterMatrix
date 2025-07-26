@@ -56,7 +56,7 @@ export class TwitterService {
         action: 'tweet',
         content,
         status: 'success',
-        metadata: result,
+        metadata: JSON.stringify(result),
       });
       
       return result;
@@ -67,6 +67,7 @@ export class TwitterService {
         content,
         status: 'failed',
         errorMessage: error.message,
+        metadata: null,
       });
       throw error;
     }
@@ -86,7 +87,9 @@ export class TwitterService {
       }
       
       const result = await this.makeRequest('/graphql/FavoriteTweet', 'POST', {
-        tweet_id: tweetId,
+        variables: {
+          tweet_id: tweetId,
+        }
       }, authToken);
       
       await storage.createActivity({
@@ -94,7 +97,7 @@ export class TwitterService {
         action: 'like',
         tweetId,
         status: 'success',
-        metadata: result,
+        metadata: JSON.stringify(result),
       });
       
       return result;
@@ -105,6 +108,7 @@ export class TwitterService {
         tweetId,
         status: 'failed',
         errorMessage: error.message,
+        metadata: null,
       });
       throw error;
     }
@@ -138,7 +142,7 @@ export class TwitterService {
         content,
         tweetId,
         status: 'success',
-        metadata: result,
+        metadata: JSON.stringify(result),
       });
       
       return result;
@@ -150,6 +154,7 @@ export class TwitterService {
         tweetId,
         status: 'failed',
         errorMessage: error.message,
+        metadata: null,
       });
       throw error;
     }
@@ -169,7 +174,9 @@ export class TwitterService {
       }
       
       const result = await this.makeRequest('/graphql/CreateRetweet', 'POST', {
-        tweet_id: tweetId,
+        variables: {
+          tweet_id: tweetId,
+        }
       }, authToken);
       
       await storage.createActivity({
@@ -177,7 +184,7 @@ export class TwitterService {
         action: 'retweet',
         tweetId,
         status: 'success',
-        metadata: result,
+        metadata: JSON.stringify(result),
       });
       
       return result;
@@ -188,6 +195,88 @@ export class TwitterService {
         tweetId,
         status: 'failed',
         errorMessage: error.message,
+        metadata: null,
+      });
+      throw error;
+    }
+  }
+
+  async followUser(userId: string, botId: number) {
+    try {
+      // Get bot's auth token
+      const bot = await storage.getBot(botId);
+      if (!bot) {
+        throw new Error('Bot not found');
+      }
+      
+      const authToken = bot.twitterAuthToken;
+      if (!authToken) {
+        throw new Error('Bot does not have a Twitter auth token');
+      }
+      
+      // Using the 1.1 API endpoint for following
+      const result = await this.makeRequest('/1.1/friendships/create', 'POST', {
+        user_id: userId,
+        follow: true
+      }, authToken);
+      
+      await storage.createActivity({
+        botId,
+        action: 'follow',
+        targetUser: userId,
+        status: 'success',
+        metadata: JSON.stringify(result),
+      });
+      
+      return result;
+    } catch (error: any) {
+      await storage.createActivity({
+        botId,
+        action: 'follow',
+        targetUser: userId,
+        status: 'failed',
+        errorMessage: error.message,
+        metadata: null,
+      });
+      throw error;
+    }
+  }
+
+  async unfollowUser(userId: string, botId: number) {
+    try {
+      // Get bot's auth token
+      const bot = await storage.getBot(botId);
+      if (!bot) {
+        throw new Error('Bot not found');
+      }
+      
+      const authToken = bot.twitterAuthToken;
+      if (!authToken) {
+        throw new Error('Bot does not have a Twitter auth token');
+      }
+      
+      // Using the 1.1 API endpoint for unfollowing
+      const result = await this.makeRequest('/1.1/friendships/destroy', 'POST', {
+        user_id: userId
+      }, authToken);
+      
+      await storage.createActivity({
+        botId,
+        action: 'unfollow',
+        targetUser: userId,
+        status: 'success',
+        metadata: JSON.stringify(result),
+      });
+      
+      return result;
+    } catch (error: any) {
+      await storage.createActivity({
+        botId,
+        action: 'unfollow',
+        targetUser: userId,
+        status: 'failed',
+        errorMessage: error.message,
+        metadata: null,
       });
       throw error;
     }
@@ -231,10 +320,60 @@ export class TwitterService {
     }
   }
 
+  async getUserByScreenName(screenName: string) {
+    try {
+      const result = await this.makeRequest('/graphql/UserByScreenName', 'POST', {
+        screen_name: screenName
+      });
+      
+      return result;
+    } catch (error: any) {
+      throw error;
+    }
+  }
+
+  async getTweetDetail(tweetId: string) {
+    try {
+      const result = await this.makeRequest('/graphql/TweetDetail', 'POST', {
+        focalTweetId: tweetId
+      });
+      
+      return result;
+    } catch (error: any) {
+      throw error;
+    }
+  }
+
+  async getFollowers(userId: string, count = 20) {
+    try {
+      const result = await this.makeRequest('/graphql/Followers', 'POST', {
+        userId,
+        count
+      });
+      
+      return result;
+    } catch (error: any) {
+      throw error;
+    }
+  }
+
+  async getFollowing(userId: string, count = 20) {
+    try {
+      const result = await this.makeRequest('/graphql/Following', 'POST', {
+        userId,
+        count
+      });
+      
+      return result;
+    } catch (error: any) {
+      throw error;
+    }
+  }
+
   async checkApiLimits() {
     try {
-      // For testing purposes, we'll use a simple endpoint that doesn't require auth token
-      const result = await this.makeRequest('/check-remaining-calls', 'GET');
+      // Use the correct endpoint for checking remaining API calls
+      const result = await this.makeRequest('/twitter-api/check-remaining-calls', 'GET');
       return result;
     } catch (error: any) {
       throw error;
