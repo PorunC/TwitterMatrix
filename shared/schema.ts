@@ -1,36 +1,36 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, blob } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
 });
 
-export const bots = pgTable("bots", {
-  id: serial("id").primaryKey(),
+export const bots = sqliteTable("bots", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   description: text("description"),
-  isActive: boolean("is_active").default(true),
+  isActive: integer("is_active", { mode: "boolean" }).default(true),
   twitterUsername: text("twitter_username"),
   twitterAuthToken: text("twitter_auth_token"), // Store Twitter auth token
-  topics: text("topics").array(),
+  topics: text("topics"), // JSON string array
   personality: text("personality"),
   postFrequency: integer("post_frequency").default(60), // minutes
-  lastTweetTime: timestamp("last_tweet_time"),
+  lastTweetTime: integer("last_tweet_time", { mode: "timestamp" }),
   // Bot interaction settings
-  enableInteraction: boolean("enable_interaction").default(true),
+  enableInteraction: integer("enable_interaction", { mode: "boolean" }).default(true),
   interactionFrequency: integer("interaction_frequency").default(30), // minutes
-  interactionTargets: text("interaction_targets").array(), // Bot IDs to interact with
+  interactionTargets: text("interaction_targets"), // JSON string array
   interactionBehavior: text("interaction_behavior").default("friendly"), // friendly, aggressive, neutral
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).defaultNow(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).defaultNow(),
 });
 
-export const activities = pgTable("activities", {
-  id: serial("id").primaryKey(),
+export const activities = sqliteTable("activities", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   botId: integer("bot_id").references(() => bots.id),
   action: text("action").notNull(), // 'tweet', 'like', 'reply', 'retweet', 'bot_interaction'
   content: text("content"),
@@ -39,18 +39,18 @@ export const activities = pgTable("activities", {
   targetBotId: integer("target_bot_id").references(() => bots.id), // For bot-to-bot interactions
   status: text("status").notNull(), // 'success', 'failed', 'pending'
   errorMessage: text("error_message"),
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at").defaultNow(),
+  metadata: text("metadata"), // JSON string
+  createdAt: integer("created_at", { mode: "timestamp" }).defaultNow(),
 });
 
-export const apiUsage = pgTable("api_usage", {
-  id: serial("id").primaryKey(),
+export const apiUsage = sqliteTable("api_usage", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   service: text("service").notNull(), // 'twitter', 'llm'
   endpoint: text("endpoint"),
   callsCount: integer("calls_count").default(0),
-  lastReset: timestamp("last_reset").defaultNow(),
+  lastReset: integer("last_reset", { mode: "timestamp" }).defaultNow(),
   dailyLimit: integer("daily_limit"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).defaultNow(),
 });
 
 export const insertBotSchema = createInsertSchema(bots).omit({
