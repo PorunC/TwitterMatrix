@@ -192,12 +192,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: row.description || null,
             twitterUsername: row.twitterUsername || null,
             twitterAuthToken: row.twitterAuthToken || null,
-            topics,
+            topics: JSON.stringify(topics),
             personality: row.personality || 'professional',
             postFrequency: parseInt(row.postFrequency) || 60,
             enableInteraction: row.enableInteraction === 'true' || row.enableInteraction === true,
             interactionFrequency: parseInt(row.interactionFrequency) || 30,
-            interactionTargets,
+            interactionTargets: JSON.stringify(interactionTargets),
             interactionBehavior: row.interactionBehavior || 'friendly',
             isActive: true
           };
@@ -333,6 +333,138 @@ CryptoBot,加密货币专家机器人,@cryptobot2024,your_auth_token_here,"加�
       const botId = parseInt(req.params.id);
       botInteractionService.stopBotInteractions(botId);
       res.json({ success: true, message: "Bot interactions stopped" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Start all bot interactions
+  app.post("/api/interactions/start-all", async (req, res) => {
+    try {
+      const result = await botInteractionService.startAllBotInteractions();
+      broadcast({ type: 'all_interactions_started', data: result });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Stop all bot interactions
+  app.post("/api/interactions/stop-all", async (req, res) => {
+    try {
+      botInteractionService.stopAllInteractions();
+      broadcast({ type: 'all_interactions_stopped' });
+      res.json({ success: true, message: "All bot interactions stopped" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Trigger topic-based interaction for a specific bot
+  app.post("/api/bots/:id/interactions/topic", async (req, res) => {
+    try {
+      const botId = parseInt(req.params.id);
+      await botInteractionService.performTopicBasedInteraction(botId);
+      res.json({ success: true, message: "Topic-based interaction triggered" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Manual interaction: follow user
+  app.post("/api/bots/:id/follow", async (req, res) => {
+    try {
+      const botId = parseInt(req.params.id);
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+      
+      const result = await twitterService.followUser(userId, botId);
+      broadcast({ type: 'user_followed', botId, userId });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Manual interaction: like tweet
+  app.post("/api/bots/:id/like", async (req, res) => {
+    try {
+      const botId = parseInt(req.params.id);
+      const { tweetId } = req.body;
+      
+      if (!tweetId) {
+        return res.status(400).json({ error: "tweetId is required" });
+      }
+      
+      const result = await twitterService.likeTweet(tweetId, botId);
+      broadcast({ type: 'tweet_liked', botId, tweetId });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Manual interaction: retweet
+  app.post("/api/bots/:id/retweet", async (req, res) => {
+    try {
+      const botId = parseInt(req.params.id);
+      const { tweetId } = req.body;
+      
+      if (!tweetId) {
+        return res.status(400).json({ error: "tweetId is required" });
+      }
+      
+      const result = await twitterService.retweetTweet(tweetId, botId);
+      broadcast({ type: 'tweet_retweeted', botId, tweetId });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Manual interaction: reply to tweet
+  app.post("/api/bots/:id/reply", async (req, res) => {
+    try {
+      const botId = parseInt(req.params.id);
+      const { tweetId, content } = req.body;
+      
+      if (!tweetId || !content) {
+        return res.status(400).json({ error: "tweetId and content are required" });
+      }
+      
+      const result = await twitterService.replyToTweet(tweetId, content, botId);
+      broadcast({ type: 'tweet_replied', botId, tweetId, content });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Search tweets for interaction
+  app.get("/api/search/tweets", async (req, res) => {
+    try {
+      const { query, count = 10 } = req.query;
+      
+      if (!query) {
+        return res.status(400).json({ error: "query parameter is required" });
+      }
+      
+      const results = await twitterService.searchTweets(query as string, parseInt(count as string));
+      res.json(results);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user information
+  app.get("/api/users/:username", async (req, res) => {
+    try {
+      const { username } = req.params;
+      const userInfo = await twitterService.getUserByScreenName(username);
+      res.json(userInfo);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
