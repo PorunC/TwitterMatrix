@@ -15,6 +15,10 @@ vite.config.ts.*
 *.db
 *.sqlite
 *.sqlite3
+data/*.sqlite
+data/*.db
+data/database.sqlite-shm
+data/database.sqlite-wal
 
 # Logs
 logs

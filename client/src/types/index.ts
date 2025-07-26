@@ -4,10 +4,16 @@ export interface Bot {
   description: string | null;
   isActive: boolean;
   twitterUsername: string | null;
-  topics: string[] | null;
+  twitterAuthToken: string | null;
+  topics: string | null; // JSON string in database
   personality: string | null;
   postFrequency: number;
   lastTweetTime: Date | null;
+  // Bot interaction settings
+  enableInteraction: boolean;
+  interactionFrequency: number;
+  interactionTargets: string | null; // JSON string in database
+  interactionBehavior: string;
   createdAt: Date;
   updatedAt: Date;
 }
