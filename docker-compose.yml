@@ -1,0 +1,28 @@
+services:
+  app:
+    build: .
+    container_name: twitter-matrix-app
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: /app/data/database.sqlite
+      SESSION_SECRET: dev-session-secret-change-in-production
+      PORT: 5000
+      # Add your API keys here or use .env file
+      # APIDANCE_API_KEY: your_apidance_api_key_here
+      # APIDANCE_BASE_URL: https://api.apidance.pro
+      # BIANXIE_API_KEY: your_bianxie_api_key_here
+      # BIANXIE_BASE_URL: https://api.bianxie.ai/v1
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      - /app/node_modules
+      # Mount SQLite database directory for persistence
+      - sqlite_data:/app/data
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+volumes:
+  sqlite_data:
