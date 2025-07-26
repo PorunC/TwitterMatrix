@@ -18,9 +18,16 @@ import {
   BarChart3,
   AlertCircle,
   CheckCircle,
-  XCircle
+  XCircle,
+  UserPlus,
+  Zap,
+  PlayCircle,
+  PauseCircle,
+  Search,
+  Send
 } from 'lucide-react';
 import { formatDistance } from 'date-fns';
+import { ManualInteractionPanel } from './ManualInteractionPanel';
 
 interface BotInteractionPanelProps {
   botId?: number;
@@ -90,11 +97,54 @@ export function BotInteractionPanel({ botId }: BotInteractionPanelProps) {
     }
   });
 
+  const startAllInteractions = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/interactions/start-all');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "批量启动成功", description: `已启动 ${data.started} 个机器人的互动功能` });
+      queryClient.invalidateQueries({ queryKey: ['/api/interactions'] });
+    },
+    onError: (error: any) => {
+      toast({ title: "批量启动失败", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const stopAllInteractions = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/interactions/stop-all');
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "批量停止成功", description: "已停止所有机器人的互动功能" });
+      queryClient.invalidateQueries({ queryKey: ['/api/interactions'] });
+    },
+    onError: (error: any) => {
+      toast({ title: "批量停止失败", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const triggerTopicInteraction = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('POST', `/api/bots/${id}/interactions/topic`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "话题互动已触发", description: "机器人将基于设定话题进行互动" });
+      queryClient.invalidateQueries({ queryKey: ['/api/interactions'] });
+    },
+    onError: (error: any) => {
+      toast({ title: "触发失败", description: error.message, variant: "destructive" });
+    }
+  });
+
   const getInteractionIcon = (type: string) => {
     switch (type) {
       case 'like': return <Heart className="h-4 w-4 text-red-400" />;
       case 'reply': return <MessageCircle className="h-4 w-4 text-blue-400" />;
       case 'retweet': return <Repeat className="h-4 w-4 text-green-400" />;
+      case 'follow': return <UserPlus className="h-4 w-4 text-purple-400" />;
       default: return <Users className="h-4 w-4 text-gray-400" />;
     }
   };
@@ -128,6 +178,29 @@ export function BotInteractionPanel({ botId }: BotInteractionPanelProps) {
             </SelectContent>
           </Select>
           
+          {/* 批量控制按钮 */}
+          <div className="flex items-center space-x-2">
+            <Button
+              onClick={() => startAllInteractions.mutate()}
+              disabled={startAllInteractions.isPending}
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <PlayCircle className="h-4 w-4 mr-2" />
+              启动全部
+            </Button>
+            <Button
+              onClick={() => stopAllInteractions.mutate()}
+              disabled={stopAllInteractions.isPending}
+              size="sm"
+              variant="outline"
+              className="text-white border-slate-600 hover:bg-slate-600"
+            >
+              <PauseCircle className="h-4 w-4 mr-2" />
+              停止全部
+            </Button>
+          </div>
+          
           {selectedBotData && (
             <div className="flex items-center space-x-2">
               <Button
@@ -148,14 +221,24 @@ export function BotInteractionPanel({ botId }: BotInteractionPanelProps) {
                 <Pause className="h-4 w-4 mr-2" />
                 停止互动
               </Button>
+              <Button
+                onClick={() => triggerTopicInteraction.mutate(selectedBotData.id)}
+                disabled={triggerTopicInteraction.isPending}
+                size="sm"
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                <Zap className="h-4 w-4 mr-2" />
+                话题互动
+              </Button>
             </div>
           )}
         </div>
       </div>
 
       <Tabs defaultValue="interactions" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 bg-slate-800 border-slate-700">
+        <TabsList className="grid w-full grid-cols-4 bg-slate-800 border-slate-700">
           <TabsTrigger value="interactions" className="text-white">互动记录</TabsTrigger>
+          <TabsTrigger value="manual" className="text-white">手动互动</TabsTrigger>
           <TabsTrigger value="stats" className="text-white">统计数据</TabsTrigger>
           <TabsTrigger value="settings" className="text-white">互动设置</TabsTrigger>
         </TabsList>
@@ -193,10 +276,11 @@ export function BotInteractionPanel({ botId }: BotInteractionPanelProps) {
                                 <span className="text-gray-400">
                                   {interaction.metadata?.interactionType === 'like' ? '点赞了' :
                                    interaction.metadata?.interactionType === 'reply' ? '回复了' :
-                                   interaction.metadata?.interactionType === 'retweet' ? '转发了' : '互动了'}
+                                   interaction.metadata?.interactionType === 'retweet' ? '转发了' :
+                                   interaction.metadata?.interactionType === 'follow' ? '关注了' : '互动了'}
                                 </span>
                                 <span className="font-medium text-blue-400">
-                                  {interaction.metadata?.targetBot}
+                                  {interaction.metadata?.targetBot || interaction.targetUser}
                                 </span>
                               </div>
                               <p className="text-gray-300 text-sm">{interaction.content}</p>
@@ -232,6 +316,10 @@ export function BotInteractionPanel({ botId }: BotInteractionPanelProps) {
               </ScrollArea>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="manual" className="space-y-4">
+          <ManualInteractionPanel />
         </TabsContent>
 
         <TabsContent value="stats" className="space-y-4">
@@ -343,6 +431,24 @@ export function BotInteractionPanel({ botId }: BotInteractionPanelProps) {
                       </div>
                     </div>
                   </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <UserPlus className="h-4 w-4 text-purple-400" />
+                      <span className="text-gray-300">关注</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-white font-medium">{stats.interactionsByType.follows || 0}</span>
+                      <div className="w-24 bg-slate-700 rounded-full h-2">
+                        <div 
+                          className="bg-purple-400 h-2 rounded-full" 
+                          style={{
+                            width: `${stats.totalInteractions > 0 ? ((stats.interactionsByType.follows || 0) / stats.totalInteractions) * 100 : 0}%`
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -383,18 +489,25 @@ export function BotInteractionPanel({ botId }: BotInteractionPanelProps) {
                       <div className="flex justify-between">
                         <span>互动目标:</span>
                         <div className="flex flex-wrap gap-1">
-                          {selectedBotData.interactionTargets && selectedBotData.interactionTargets.length > 0 ? (
-                            selectedBotData.interactionTargets.map((targetId: string) => {
-                              const targetBot = bots.find((b: any) => b.id.toString() === targetId);
-                              return targetBot ? (
-                                <Badge key={targetId} variant="outline" className="text-xs">
-                                  {targetBot.name}
-                                </Badge>
-                              ) : null;
-                            })
-                          ) : (
-                            <span className="text-gray-400">无</span>
-                          )}
+                          {selectedBotData.interactionTargets && (() => {
+                            try {
+                              const targets = JSON.parse(selectedBotData.interactionTargets || '[]');
+                              return targets.length > 0 ? (
+                                targets.map((targetId: string) => {
+                                  const targetBot = bots.find((b: any) => b.id.toString() === targetId);
+                                  return targetBot ? (
+                                    <Badge key={targetId} variant="outline" className="text-xs">
+                                      {targetBot.name}
+                                    </Badge>
+                                  ) : null;
+                                })
+                              ) : (
+                                <span className="text-gray-400">无</span>
+                              );
+                            } catch {
+                              return <span className="text-gray-400">无</span>;
+                            }
+                          })()}
                         </div>
                       </div>
                     </div>
